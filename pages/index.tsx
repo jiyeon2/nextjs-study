@@ -1,41 +1,125 @@
-import { GetServerSideProps, NextPage } from 'next'
+import {
+  // useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from 'react-query'
+import axios from 'axios'
 
-interface Props {
-  launch: {
-    mission: string
-    site: string
-    timestamp: number
-    rocket: string
-  }
+type UserData = {
+  id: number
+  avatar: string
+  email: string
+  first_name: string
+  last_name: string
 }
-const IndexPage: NextPage<Props> = ({ launch }) => {
-  const date = new Date(launch.timestamp)
+
+type Support = {
+  text: string
+  url: string
+}
+
+type Users = {
+  data: UserData[]
+  page: number
+  per_page: number
+  support: Support
+  total: number
+  total_pages: number
+}
+
+const fetchUsers = async () => {
+  const res = await axios.get('https://reqres.in/api/users')
+  if (res.status !== 200) {
+    throw new Error('error in fetchUsers')
+  }
+  return res.data
+}
+// const fetchInfiniteUsers = async ({ pageParam = 1 }) => {
+//   const res = await axios.get(`https://reqres.in/api/users?page=${pageParam}`)
+//   if (res.status !== 200) {
+//     throw new Error('error in fetchUsers')
+//   }
+//   return res.data
+// }
+const addUser = async (user: { first_name: string; last_name: string }) => {
+  const res = await axios.post('https://reqres.in/api/users', {
+    first_name: user.first_name,
+    last_name: user.last_name,
+  })
+
+  if (res.status !== 201) {
+    throw new Error('error in addUser')
+  }
+  return res.data
+}
+
+function App(): JSX.Element {
+  const queryClient = useQueryClient()
+
+  const {
+    data: users,
+    isLoading,
+    error,
+    //  refetch
+  } = useQuery<Users, ErrorConstructor>('users', fetchUsers, {
+    enabled: true, // 자동 refetch
+    refetchOnWindowFocus: false, // 윈도우 포커스시 refetch 안하도록
+    refetchInterval: false,
+  })
+  // const { data, isLoading, isFetching, fetchNextPage, hasNextPage, error } = useInfiniteQuery<
+  //   Users,
+  //   ErrorConstructor
+  // >('users', fetchInfiniteUsers, {
+  //   getNextPageParam: (lastPage, allPages) => {
+  //     if (lastPage.page < lastPage.total_pages) return lastPage.page + 1
+  //     return false // hasNextPage = false
+  //   },
+  // })
+  const {
+    // mutate,
+    mutateAsync,
+    isLoading: isAddingUser,
+    // error: addError,
+  } = useMutation(addUser)
+
+  const handleAddUser = async () => {
+    const newUser = await mutateAsync({ first_name: 'test', last_name: 'user' })
+
+    // queryClient.invalidateQueries('users') // 'users'쿼리 폐기하고 알아서 refetch 함 = 다시 get /users 요청하는것
+    // 전체 데이터를 다시 요청하지 않고, 캐시된 데이터에 새로 생성된 데이터를 추가함
+    queryClient.setQueriesData<Users | undefined>('users', (oldData) => {
+      if (oldData) {
+        return {
+          ...oldData,
+          data: [newUser, ...oldData.data],
+        }
+      }
+    })
+  }
+
+  if (isLoading) return <p>Loading...</p> // 맨처음 fetching 일때만 true
+  if (error) return <p>there is a error...</p>
+  if (!users) return <p>no data fetched</p>
+
   return (
-    <main>
-      <h1>Next SpaceX Launch: {launch.mission}</h1>
-      <p>
-        {launch.rocket} will take off from {launch.site} on {date.toDateString()}
-      </p>
-    </main>
+    <div>
+      <p>react query</p>
+      {isAddingUser && <p>adding user</p>}
+      <button onClick={handleAddUser}>add user</button>
+      {users &&
+        users.data.map((user) => (
+          <p key={user.id}>
+            {user.first_name} {user.last_name}
+          </p>
+        ))}
+
+      {/* {data?.pages.map((page) => page.data.map((user) => <p key={user.id}>{user.first_name}</p>))} */}
+      {/* isFetching : 최초 fetch 이후 refetch 일때 true*/}
+      {/* {isFetching && <p>fetching...</p>} */}
+      {/* {hasNextPage && <button onClick={() => fetchNextPage()}>LoadMore</button>} */}
+    </div>
   )
 }
-export default IndexPage
 
-/*
- * More information about getServerSideProps:
- * https://nextjs.org/docs/basic-features/data-fetching#getserversideprops-server-side-rendering
- */
-export const getServerSideProps: GetServerSideProps<Props> = async () => {
-  const response = await fetch('https://api.spacexdata.com/v3/launches/next')
-  const nextLaunch = await response.json()
-  return {
-    props: {
-      launch: {
-        mission: nextLaunch.mission_name,
-        site: nextLaunch.launch_site.site_name_long,
-        timestamp: nextLaunch.launch_date_unix * 1000,
-        rocket: nextLaunch.rocket.rocket_name,
-      },
-    },
-  }
-}
+export default App
