@@ -2,6 +2,7 @@
 import type { AppProps /*, AppContext */ } from 'next/app'
 import { QueryClient, QueryClientProvider } from 'react-query'
 import { ReactQueryDevtools } from 'react-query/devtools'
+import { RecoilRoot } from 'recoil'
 
 const queryClient = new QueryClient()
 
@@ -9,8 +10,10 @@ function MyApp({ Component, pageProps }: AppProps): JSX.Element {
   return (
     <>
       <QueryClientProvider client={queryClient}>
-        <Component {...pageProps} />
-        <ReactQueryDevtools initialIsOpen={true} />
+        <RecoilRoot>
+          <Component {...pageProps} />
+          <ReactQueryDevtools initialIsOpen={false} />
+        </RecoilRoot>
       </QueryClientProvider>
     </>
   )
